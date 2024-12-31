@@ -80,20 +80,49 @@ def verify_chrome_installation():
         return False, str(e)
 
 def verify_chromedriver():
-    """Verify ChromeDriver installation and version."""
-    chromedriver_path = os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver')
+    """Verify ChromeDriver installation and version with enhanced error checking."""
+    # Check multiple possible locations
+    chromedriver_paths = [
+        os.environ.get('CHROMEDRIVER_PATH', '/usr/local/bin/chromedriver'),
+        '/usr/bin/chromedriver',
+        '/usr/local/bin/chromedriver',
+        'chromedriver'
+    ]
     
-    if not os.path.exists(chromedriver_path):
-        logger.error(f"ChromeDriver not found at {chromedriver_path}")
-        return False, "ChromeDriver not found"
+    logger.info("Checking ChromeDriver in following locations:")
+    for path in chromedriver_paths:
+        logger.info(f"Checking path: {path}")
+        
+        # Check if path exists
+        if path and os.path.exists(path):
+            logger.info(f"ChromeDriver found at: {path}")
+            try:
+                # Check if executable
+                if not os.access(path, os.X_OK):
+                    logger.warning(f"ChromeDriver at {path} is not executable")
+                    try:
+                        os.chmod(path, 0o755)
+                        logger.info(f"Added executable permission to ChromeDriver at {path}")
+                    except Exception as e:
+                        logger.error(f"Failed to set executable permission: {e}")
+                        continue
+                
+                # Try to get version
+                version_output = subprocess.check_output([path, '--version'], 
+                                                       stderr=subprocess.STDOUT).decode()
+                logger.info(f"ChromeDriver version at {path}: {version_output.strip()}")
+                
+                # Update environment variable with working path
+                os.environ['CHROMEDRIVER_PATH'] = path
+                return True, version_output.strip()
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Error running ChromeDriver at {path}: {e.output.decode()}")
+            except Exception as e:
+                logger.error(f"Unexpected error with ChromeDriver at {path}: {e}")
     
-    try:
-        version_output = subprocess.check_output([chromedriver_path, '--version']).decode()
-        logger.info(f"ChromeDriver version: {version_output.strip()}")
-        return True, version_output.strip()
-    except Exception as e:
-        logger.error(f"Error verifying ChromeDriver: {e}")
-        return False, str(e)
+    # If we get here, no working ChromeDriver was found
+    logger.error("No working ChromeDriver installation found")
+    return False, "No working ChromeDriver installation found in any location"
 
 def linkedin_automation(email, password, recipient_name, message):
     """

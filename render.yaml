@@ -9,86 +9,53 @@ services:
       pwd
       ls -la
       
-      # Create necessary directories
-      mkdir -p /usr/local/bin
-      mkdir -p /tmp
-      chmod 777 /tmp
+      # Create necessary directories with explicit permissions
+      sudo mkdir -p /usr/local/bin
+      sudo mkdir -p /tmp
+      sudo chmod 777 /tmp
+      sudo chmod 777 /usr/local/bin
       
       # Update package repositories
-      apt-get update
-      apt-get install -y wget unzip gnupg2 apt-transport-https ca-certificates
+      sudo apt-get update
+      sudo apt-get install -y wget unzip gnupg2 apt-transport-https ca-certificates
       
-      # Try to install Chromium first (as it's usually available in default repos)
-      apt-get install -y chromium-browser chromium-chromedriver
+      # Install Chromium and ChromeDriver
+      sudo apt-get install -y chromium-browser chromium-chromedriver
       
-      # If Chromium installation succeeded, create necessary symlinks
-      if [ -f /usr/bin/chromium-browser ]; then
-        ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome-stable
-        ln -sf /usr/bin/chromium-browser /usr/local/bin/google-chrome
-        export CHROME_BIN=/usr/bin/chromium-browser
-      else
-        # If Chromium failed, try Google Chrome
-        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
-        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-        apt-get update
-        apt-get install -y google-chrome-stable
-        export CHROME_BIN=/usr/bin/google-chrome-stable
-      fi
+      # Create explicit symlinks with sudo
+      sudo ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome-stable
+      sudo ln -sf /usr/bin/chromium-browser /usr/local/bin/google-chrome
       
-      # Verify browser installation
-      echo "Checking browser installation:"
-      which chromium-browser || true
-      which google-chrome-stable || true
-      $CHROME_BIN --version
+      # Set Chrome binary location
+      export CHROME_BIN=/usr/bin/chromium-browser
       
-      # Install ChromeDriver if not already installed with Chromium
-      if [ ! -f /usr/bin/chromedriver ]; then
-        CHROME_VERSION=$($CHROME_BIN --version | awk '{print $2}' | cut -d. -f1)
-        CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}")
-        echo "Browser version: $CHROME_VERSION"
-        echo "ChromeDriver version: $CHROMEDRIVER_VERSION"
-        
-        wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-        unzip -q chromedriver_linux64.zip
-        mv chromedriver /usr/local/bin/
-        chmod +x /usr/local/bin/chromedriver
-        rm chromedriver_linux64.zip
-      fi
+      # Explicitly set ChromeDriver symlink and permissions
+      sudo ln -sf /usr/bin/chromedriver /usr/local/bin/chromedriver
+      sudo chmod +x /usr/local/bin/chromedriver
       
-      # Create ChromeDriver symlink
-      ln -sf $(which chromedriver) /usr/local/bin/chromedriver
-      
-      # Set environment variables
-      export CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
-      
-      # List relevant directories
-      echo "Browser and ChromeDriver locations:"
-      ls -la /usr/bin/chromium* || true
-      ls -la /usr/bin/google-chrome* || true
-      ls -la /usr/local/bin/chromedriver || true
+      # Verify installations
+      echo "Verifying installations:"
+      $CHROME_BIN --version || true
+      /usr/local/bin/chromedriver --version || true
+      ls -la /usr/local/bin/chromedriver
       
       # Install Python dependencies
       pip install -r requirements.txt
       
-      # Final verification
+      # Final system check with full paths
       echo "Final system check:"
-      $CHROME_BIN --version
-      chromedriver --version
+      /usr/bin/chromium-browser --version
+      /usr/local/bin/chromedriver --version
       
     startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.9
       - key: PYTHONUNBUFFERED
-        value: true
+        value: "true"
       - key: CHROME_BINARY_LOCATION
         value: /usr/bin/chromium-browser
       - key: CHROMEDRIVER_PATH
         value: /usr/local/bin/chromedriver
-    healthCheckPath: /
-    buildFilter:
-      paths:
-        - requirements.txt
-        - app.py
-        - templates/**
-        - static/**
+      - key: PATH
+        value: /usr/local/bin:/usr/bin:${PATH}
