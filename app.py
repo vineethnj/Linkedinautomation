@@ -13,14 +13,14 @@ app = Flask(__name__)
 
 # Function to automate LinkedIn messaging
 def linkedin_automation(email, password, recipient_name, message):
-    # Set up Chrome options for headless mode
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    
-    chrome_options.binary_location = "/usr/bin/google-chrome"
+
+    # Specify the Chrome binary location
+    chrome_options.binary_location = "/usr/bin/google-chrome-stable"
 
     # Initialize the Chrome browser
     browser = webdriver.Chrome(service=Service("/usr/local/bin/chromedriver"), options=chrome_options)
