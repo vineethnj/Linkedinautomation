@@ -4,27 +4,23 @@ services:
     runtime: python
     pythonVersion: "3.9"
     buildCommand: |
-
-
-      chmod 755 /usr/local/bin/chromedriver
-      chmod 755 /usr/bin/google-chrome-stable
-      
-      # Create log directory with proper permissions
-      mkdir -p /tmp
-      chmod 777 /tmp
-      
-      # Update and install dependencies
+      # Update package list and install prerequisites
       apt-get update
-      apt-get install -y wget unzip gnupg curl
+      apt-get install -y wget unzip gnupg curl apt-transport-https ca-certificates
 
-      # Add Chrome repository and install Chrome
-      wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome-keyring.gpg
-      echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+      # Set up Chrome repository properly
+      wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+      echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
       apt-get update
-      apt-get install -y google-chrome-stable
 
-      # Get Chrome version and install matching chromedriver
-      CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d. -f1)
+      # Install Chrome with explicit version pinning
+      apt-get install -y google-chrome-stable=120.0.6099.* || apt-get install -y google-chrome-stable
+
+      # Verify Chrome installation
+      google-chrome-stable --version
+
+      # Install matching chromedriver
+      CHROME_VERSION=$(google-chrome-stable --version | awk '{print $3}' | cut -d. -f1)
       CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}")
       wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
       unzip -q chromedriver_linux64.zip
@@ -32,9 +28,15 @@ services:
       chmod +x /usr/local/bin/chromedriver
       rm chromedriver_linux64.zip
 
-      # Debug information
+      # Set up directories and permissions
+      mkdir -p /tmp
+      chmod 777 /tmp
+      chmod 755 /usr/local/bin/chromedriver
+      chmod 755 /usr/bin/google-chrome-stable
+
+      # Verify installations
       echo "Chrome version:"
-      google-chrome --version
+      google-chrome-stable --version
       echo "Chrome location:"
       which google-chrome-stable
       echo "Chromedriver version:"
@@ -50,6 +52,10 @@ services:
         value: 3.9
       - key: PYTHONUNBUFFERED
         value: true
+      - key: CHROME_BIN  # Add explicit Chrome binary location
+        value: /usr/bin/google-chrome-stable
+      - key: CHROMEDRIVER_PATH  # Add explicit chromedriver location
+        value: /usr/local/bin/chromedriver
     healthCheckPath: /
     buildFilter:
       paths:
