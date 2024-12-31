@@ -4,57 +4,86 @@ services:
     runtime: python
     pythonVersion: "3.9"
     buildCommand: |
-      # Update package list and install prerequisites
-      apt-get update
-      apt-get install -y wget unzip gnupg curl apt-transport-https ca-certificates
-
-      # Set up Chrome repository properly
-      wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
-      echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-      apt-get update
-
-      # Install Chrome with explicit version pinning
-      apt-get install -y google-chrome-stable=120.0.6099.* || apt-get install -y google-chrome-stable
-
-      # Verify Chrome installation
-      google-chrome-stable --version
-
-      # Install matching chromedriver
-      CHROME_VERSION=$(google-chrome-stable --version | awk '{print $3}' | cut -d. -f1)
-      CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}")
-      wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-      unzip -q chromedriver_linux64.zip
-      mv chromedriver /usr/local/bin/
-      chmod +x /usr/local/bin/chromedriver
-      rm chromedriver_linux64.zip
-
-      # Set up directories and permissions
+      # Print initial system info
+      echo "Starting build process..."
+      pwd
+      ls -la
+      
+      # Create necessary directories
+      mkdir -p /usr/local/bin
       mkdir -p /tmp
       chmod 777 /tmp
-      chmod 755 /usr/local/bin/chromedriver
-      chmod 755 /usr/bin/google-chrome-stable
-
-      # Verify installations
-      echo "Chrome version:"
-      google-chrome-stable --version
-      echo "Chrome location:"
-      which google-chrome-stable
-      echo "Chromedriver version:"
-      chromedriver --version
-      echo "Chromedriver location:"
-      which chromedriver
-
+      
+      # Update package repositories
+      apt-get update
+      apt-get install -y wget unzip gnupg2 apt-transport-https ca-certificates
+      
+      # Try to install Chromium first (as it's usually available in default repos)
+      apt-get install -y chromium-browser chromium-chromedriver
+      
+      # If Chromium installation succeeded, create necessary symlinks
+      if [ -f /usr/bin/chromium-browser ]; then
+        ln -sf /usr/bin/chromium-browser /usr/bin/google-chrome-stable
+        ln -sf /usr/bin/chromium-browser /usr/local/bin/google-chrome
+        export CHROME_BIN=/usr/bin/chromium-browser
+      else
+        # If Chromium failed, try Google Chrome
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add -
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+        apt-get update
+        apt-get install -y google-chrome-stable
+        export CHROME_BIN=/usr/bin/google-chrome-stable
+      fi
+      
+      # Verify browser installation
+      echo "Checking browser installation:"
+      which chromium-browser || true
+      which google-chrome-stable || true
+      $CHROME_BIN --version
+      
+      # Install ChromeDriver if not already installed with Chromium
+      if [ ! -f /usr/bin/chromedriver ]; then
+        CHROME_VERSION=$($CHROME_BIN --version | awk '{print $2}' | cut -d. -f1)
+        CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}")
+        echo "Browser version: $CHROME_VERSION"
+        echo "ChromeDriver version: $CHROMEDRIVER_VERSION"
+        
+        wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+        unzip -q chromedriver_linux64.zip
+        mv chromedriver /usr/local/bin/
+        chmod +x /usr/local/bin/chromedriver
+        rm chromedriver_linux64.zip
+      fi
+      
+      # Create ChromeDriver symlink
+      ln -sf $(which chromedriver) /usr/local/bin/chromedriver
+      
+      # Set environment variables
+      export CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
+      
+      # List relevant directories
+      echo "Browser and ChromeDriver locations:"
+      ls -la /usr/bin/chromium* || true
+      ls -la /usr/bin/google-chrome* || true
+      ls -la /usr/local/bin/chromedriver || true
+      
       # Install Python dependencies
       pip install -r requirements.txt
+      
+      # Final verification
+      echo "Final system check:"
+      $CHROME_BIN --version
+      chromedriver --version
+      
     startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.9
       - key: PYTHONUNBUFFERED
         value: true
-      - key: CHROME_BIN  # Add explicit Chrome binary location
-        value: /usr/bin/google-chrome-stable
-      - key: CHROMEDRIVER_PATH  # Add explicit chromedriver location
+      - key: CHROME_BINARY_LOCATION
+        value: /usr/bin/chromium-browser
+      - key: CHROMEDRIVER_PATH
         value: /usr/local/bin/chromedriver
     healthCheckPath: /
     buildFilter:

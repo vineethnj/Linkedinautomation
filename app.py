@@ -27,9 +27,12 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 def find_chrome_binary():
-    """Find Chrome binary using multiple methods."""
+    """Find Chrome or Chromium binary using multiple methods."""
     possible_paths = [
-        os.environ.get('CHROME_BIN'),  # Check environment variable first
+        os.environ.get('CHROME_BINARY_LOCATION'),  # Check environment variable first
+        os.environ.get('CHROME_BIN'),
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
         "/usr/bin/google-chrome-stable",
         "/usr/bin/google-chrome",
         "/usr/local/bin/google-chrome",
@@ -38,38 +41,42 @@ def find_chrome_binary():
     ]
     
     # Log all possible paths we're checking
-    logger.debug(f"Checking Chrome paths: {possible_paths}")
+    logger.debug(f"Checking browser paths: {possible_paths}")
     
     # Check each path
     for path in possible_paths:
         if path and os.path.exists(path):
-            logger.info(f"Chrome found at: {path}")
+            logger.info(f"Browser found at: {path}")
             return path
             
-    # Try using 'which' command as fallback
+    # Try using 'which' command as fallback for both Chrome and Chromium
     try:
-        chrome_path = subprocess.check_output(['which', 'google-chrome-stable']).decode().strip()
-        if os.path.exists(chrome_path):
-            logger.info(f"Chrome found using 'which' command at: {chrome_path}")
-            return chrome_path
-    except subprocess.CalledProcessError:
-        logger.warning("Failed to find Chrome using 'which' command")
+        for browser in ['chromium-browser', 'google-chrome-stable', 'chromium']:
+            try:
+                browser_path = subprocess.check_output(['which', browser]).decode().strip()
+                if os.path.exists(browser_path):
+                    logger.info(f"Browser found using 'which' command at: {browser_path}")
+                    return browser_path
+            except subprocess.CalledProcessError:
+                continue
+    except Exception as e:
+        logger.warning(f"Failed to find browser using 'which' command: {e}")
     
     return None
 
 def verify_chrome_installation():
-    """Verify Chrome installation and return detailed status."""
-    chrome_binary = find_chrome_binary()
-    if not chrome_binary:
-        logger.error("Chrome binary not found")
-        return False, "Chrome binary not found"
+    """Verify Chrome/Chromium installation and return detailed status."""
+    browser_binary = find_chrome_binary()
+    if not browser_binary:
+        logger.error("No compatible browser binary found")
+        return False, "No compatible browser binary found (tried Chrome and Chromium)"
     
     try:
-        version_output = subprocess.check_output([chrome_binary, '--version']).decode()
-        logger.info(f"Chrome version: {version_output.strip()}")
+        version_output = subprocess.check_output([browser_binary, '--version']).decode()
+        logger.info(f"Browser version: {version_output.strip()}")
         return True, version_output.strip()
     except Exception as e:
-        logger.error(f"Error verifying Chrome: {e}")
+        logger.error(f"Error verifying browser: {e}")
         return False, str(e)
 
 def verify_chromedriver():
