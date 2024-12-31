@@ -5,30 +5,85 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from selenium.webdriver.chrome.service import Service
 import time
 import os
-from selenium.webdriver.chrome.service import Service
+import logging
+import subprocess
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-def linkedin_automation(email, password, recipient_name, message):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")  # Set window size
-    chrome_options.add_argument("--start-maximized")
-    chrome_options.binary_location = "/usr/bin/google-chrome-stable"
+def get_chrome_version():
+    try:
+        output = subprocess.check_output(['google-chrome-stable', '--version'])
+        version = output.decode('utf-8').strip()
+        logger.info(f"Chrome version: {version}")
+        return version
+    except Exception as e:
+        logger.error(f"Error getting Chrome version: {e}")
+        return None
 
+def check_chrome_installation():
+    chrome_paths = [
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/google-chrome",
+        "/usr/local/bin/google-chrome",
+        "/usr/bin/chrome",
+    ]
+    
+    for path in chrome_paths:
+        if os.path.exists(path):
+            logger.info(f"Chrome found at: {path}")
+            return path
+            
+    logger.error("Chrome not found in any standard location")
+    return None
+
+def linkedin_automation(email, password, recipient_name, message):
     browser = None
     try:
-        browser = webdriver.Chrome(service=Service("/usr/local/bin/chromedriver"), options=chrome_options)
-        wait = WebDriverWait(browser, 10)  # Create a WebDriverWait object
+        # Log environment information
+        logger.info("Starting LinkedIn automation")
+        logger.info(f"PATH: {os.environ.get('PATH')}")
+        chrome_binary = check_chrome_installation()
+        chrome_version = get_chrome_version()
+
+        # Configure Chrome options
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--start-maximized")
+        
+        if chrome_binary:
+            chrome_options.binary_location = chrome_binary
+
+        # Initialize WebDriver
+        logger.info("Initializing Chrome WebDriver")
+        browser = webdriver.Chrome(
+            service=Service("/usr/local/bin/chromedriver"),
+            options=chrome_options
+        )
+        
+        wait = WebDriverWait(browser, 10)
+        logger.info("WebDriver initialized successfully")
+
+        # Navigate to LinkedIn login
+        logger.info("Navigating to LinkedIn login page")
+        browser.get('https://www.linkedin.com/login')
 
         # Login process
-        browser.get('https://www.linkedin.com/login')
+        logger.info("Attempting login")
         email_input = wait.until(EC.presence_of_element_located((By.ID, 'username')))
         email_input.send_keys(email)
         
@@ -39,12 +94,16 @@ def linkedin_automation(email, password, recipient_name, message):
         login_button.click()
 
         # Verify login success
+        logger.info("Verifying login success")
         wait.until(EC.url_contains('feed'))
+        logger.info("Login successful")
 
         # Navigate to messaging
+        logger.info("Navigating to messaging section")
         browser.get('https://www.linkedin.com/messaging/')
         
         # Search for recipient
+        logger.info(f"Searching for recipient: {recipient_name}")
         search_message_input = wait.until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Search messages"]'))
         )
@@ -52,31 +111,43 @@ def linkedin_automation(email, password, recipient_name, message):
         search_message_input.send_keys(recipient_name)
         time.sleep(2)  # Allow search results to populate
 
-        # Find and click recipient
+        # Click on recipient
+        logger.info("Selecting recipient")
         user_element = wait.until(
             EC.element_to_be_clickable((By.XPATH, f'//span[text()="{recipient_name}"]'))
         )
         user_element.click()
 
         # Send message
+        logger.info("Sending message")
         message_input = wait.until(
             EC.presence_of_element_located((By.XPATH, '//div[@role="textbox"]'))
         )
         message_input.send_keys(message)
         message_input.send_keys(Keys.CONTROL + Keys.ENTER)
 
-        # Wait for message to be sent
-        time.sleep(2)
+        logger.info("Message sent successfully")
         return "Message sent successfully!"
 
     except TimeoutException as e:
-        return f"Operation timed out: {str(e)}"
+        error_msg = f"Operation timed out: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
     except NoSuchElementException as e:
-        return f"Element not found: {str(e)}"
+        error_msg = f"Element not found: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
+    except WebDriverException as e:
+        error_msg = f"WebDriver error: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
     except Exception as e:
-        return f"An error occurred: {str(e)}"
+        error_msg = f"An unexpected error occurred: {str(e)}"
+        logger.error(error_msg)
+        return error_msg
     finally:
         if browser:
+            logger.info("Closing browser")
             browser.quit()
 
 @app.route("/", methods=["GET", "POST"])
@@ -88,15 +159,20 @@ def home():
         message = request.form.get("message")
 
         if not all([email, password, recipient_name, message]):
+            logger.warning("Form submitted with missing fields")
             return render_template("index.html", error="Please fill in all the fields.")
 
         try:
             result = linkedin_automation(email, password, recipient_name, message)
+            logger.info("Automation completed with result: " + result)
             return render_template("index.html", result=result)
         except Exception as e:
-            return render_template("index.html", error=f"An error occurred: {str(e)}")
+            error_msg = f"An error occurred: {str(e)}"
+            logger.error(error_msg)
+            return render_template("index.html", error=error_msg)
 
     return render_template("index.html")
 
 if __name__ == "__main__":
-    app.run(debug=False)  # Set debug=False for production
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
