@@ -4,6 +4,15 @@ services:
     runtime: python
     pythonVersion: "3.9"
     buildCommand: |
+
+
+      chmod 755 /usr/local/bin/chromedriver
+      chmod 755 /usr/bin/google-chrome-stable
+      
+      # Create log directory with proper permissions
+      mkdir -p /tmp
+      chmod 777 /tmp
+      
       # Update and install dependencies
       apt-get update
       apt-get install -y wget unzip gnupg curl

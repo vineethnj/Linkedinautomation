@@ -15,7 +15,11 @@ import subprocess
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('/tmp/linkedin_automation.log')
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -32,19 +36,28 @@ def get_chrome_version():
         return None
 
 def check_chrome_installation():
-    chrome_paths = [
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/google-chrome",
-        "/usr/local/bin/google-chrome",
-        "/usr/bin/chrome",
-    ]
-    
-    for path in chrome_paths:
-        if os.path.exists(path):
-            logger.info(f"Chrome found at: {path}")
-            return path
+    try:
+        # First try using 'which' command
+        chrome_path = subprocess.check_output(['which', 'google-chrome-stable']).decode().strip()
+        if os.path.exists(chrome_path):
+            logger.info(f"Chrome found at: {chrome_path}")
+            return chrome_path
+    except:
+        # If 'which' fails, check common locations
+        chrome_paths = [
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/google-chrome",
+            "/usr/local/bin/google-chrome",
+            "/usr/bin/chrome",
+            "/opt/google/chrome/chrome"
+        ]
+        
+        for path in chrome_paths:
+            if os.path.exists(path):
+                logger.info(f"Chrome found at: {path}")
+                return path
             
-    logger.error("Chrome not found in any standard location")
+    logger.error("Chrome not found in any location")
     return None
 
 def linkedin_automation(email, password, recipient_name, message):
@@ -52,9 +65,10 @@ def linkedin_automation(email, password, recipient_name, message):
     try:
         # Log environment information
         logger.info("Starting LinkedIn automation")
-        logger.info(f"PATH: {os.environ.get('PATH')}")
-        chrome_binary = check_chrome_installation()
-        chrome_version = get_chrome_version()
+        chrome_path = check_chrome_installation()
+        
+        if not chrome_path:
+            raise WebDriverException("Chrome binary not found. Please ensure Chrome is installed.")
 
         # Configure Chrome options
         chrome_options = Options()
@@ -62,16 +76,29 @@ def linkedin_automation(email, password, recipient_name, message):
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--start-maximized")
-        
-        if chrome_binary:
-            chrome_options.binary_location = chrome_binary
+        chrome_options.binary_location = chrome_path
 
-        # Initialize WebDriver
-        logger.info("Initializing Chrome WebDriver")
+        # Additional debugging options
+        chrome_options.add_argument("--verbose")
+        chrome_options.add_argument("--log-level=0")
+
+        # Check if chromedriver exists
+        chromedriver_path = "/usr/local/bin/chromedriver"
+        if not os.path.exists(chromedriver_path):
+            logger.error(f"Chromedriver not found at {chromedriver_path}")
+            raise WebDriverException(f"Chromedriver not found at {chromedriver_path}")
+
+        logger.info(f"Using Chrome binary at: {chrome_path}")
+        logger.info(f"Using Chromedriver at: {chromedriver_path}")
+
+        # Initialize WebDriver with service
+        service = Service(
+            executable_path=chromedriver_path,
+            log_path="/tmp/chromedriver.log"
+        )
+
         browser = webdriver.Chrome(
-            service=Service("/usr/local/bin/chromedriver"),
+            service=service,
             options=chrome_options
         )
         
