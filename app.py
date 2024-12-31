@@ -4,11 +4,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
 from selenium.webdriver.chrome.options import Options
+import time
+import os
 
 # Function to automate LinkedIn messaging
 def linkedin_automation(email, password, recipient_name, message):
+    # Set up Chrome options for headless mode
     chrome_options = Options()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-gpu")
@@ -17,8 +19,6 @@ def linkedin_automation(email, password, recipient_name, message):
 
     # Initialize the Chrome browser
     browser = webdriver.Chrome(options=chrome_options)
-    # Initialize the Chrome browser
-    
 
     try:
         # Open LinkedIn login page
