@@ -7,6 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 import time
 import os
+from selenium.webdriver.chrome.service import Service
 
 app = Flask(__name__)
 
@@ -18,6 +19,9 @@ def linkedin_automation(email, password, recipient_name, message):
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.binary_location = "/usr/bin/google-chrome"
+    
+    browser = webdriver.Chrome(service=Service("/usr/local/bin/chromedriver"), options=chrome_options)
 
     # Initialize the Chrome browser
     browser = webdriver.Chrome(options=chrome_options)
