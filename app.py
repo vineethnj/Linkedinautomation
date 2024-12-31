@@ -1,4 +1,4 @@
-import streamlit as st
+from flask import Flask, render_template, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -7,6 +7,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 import time
 import os
+
+app = Flask(__name__)
 
 # Function to automate LinkedIn messaging
 def linkedin_automation(email, password, recipient_name, message):
@@ -44,20 +46,20 @@ def linkedin_automation(email, password, recipient_name, message):
 
         # Verify if login was successful by checking the page title or URL
         if 'feed' in browser.current_url:
-            st.success("Login successful!")
+            print("Login successful!")
         else:
-            st.error("Login failed.")
-            return
+            print("Login failed.")
+            return "Login failed."
 
         # Navigate to the messaging section
-        st.write("Navigating to messaging section...")
+        print("Navigating to messaging section...")
         browser.get('https://www.linkedin.com/messaging/')
 
         # Wait for the messaging page to load
         time.sleep(5)
 
         # Locate the "Search Message" input field
-        st.write("Locating search message input field...")
+        print("Locating search message input field...")
         search_message_input = WebDriverWait(browser, 10).until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Search messages"]'))
         )
@@ -67,7 +69,7 @@ def linkedin_automation(email, password, recipient_name, message):
         time.sleep(3)
 
         # Locate the user in the search results and click on it
-        st.write(f"Locating user '{recipient_name}'...")
+        print(f"Locating user '{recipient_name}'...")
         user_element = WebDriverWait(browser, 10).until(
             EC.presence_of_element_located((By.XPATH, f'//span[text()="{recipient_name}"]'))
         )
@@ -77,37 +79,42 @@ def linkedin_automation(email, password, recipient_name, message):
         time.sleep(3)
 
         # Locate the message input field and enter the message
-        st.write("Locating message input field...")
+        print("Locating message input field...")
         message_input = WebDriverWait(browser, 10).until(
             EC.presence_of_element_located((By.XPATH, '//div[@role="textbox"]'))
         )
         message_input.send_keys(message)
 
         # Send the message using Ctrl + Enter
-        st.write("Sending message with Ctrl + Enter...")
+        print("Sending message with Ctrl + Enter...")
         message_input.send_keys(Keys.CONTROL + Keys.ENTER)
 
         # Wait for the message to be sent
         time.sleep(3)
 
-        st.success("Message sent successfully!")
+        print("Message sent successfully!")
+        return "Message sent successfully!"
 
     finally:
         # Close the browser
         browser.quit()
 
-# Streamlit UI
-st.title("LinkedIn Message Automation")
+# Route for the home page
+@app.route("/", methods=["GET", "POST"])
+def home():
+    if request.method == "POST":
+        email = request.form.get("email")
+        password = request.form.get("password")
+        recipient_name = request.form.get("recipient_name")
+        message = request.form.get("message")
 
-# Input fields
-email = st.text_input("Enter your LinkedIn email:")
-password = st.text_input("Enter your LinkedIn password:", type="password")
-recipient_name = st.text_input("Enter the recipient's name:")
-message = st.text_area("Enter your message:")
+        if email and password and recipient_name and message:
+            result = linkedin_automation(email, password, recipient_name, message)
+            return render_template("index.html", result=result)
+        else:
+            return render_template("index.html", error="Please fill in all the fields.")
 
-# Button to trigger the automation
-if st.button("Send Message"):
-    if email and password and recipient_name and message:
-        linkedin_automation(email, password, recipient_name, message)
-    else:
-        st.error("Please fill in all the fields.")
+    return render_template("index.html")
+
+if __name__ == "__main__":
+    app.run(debug=True)

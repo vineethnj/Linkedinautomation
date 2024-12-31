@@ -3,4 +3,4 @@ services:
     name: linkedin-automation
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py
+    startCommand: gunicorn app:app
