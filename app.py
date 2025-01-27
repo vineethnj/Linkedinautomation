@@ -12,7 +12,6 @@ import os
 import logging
 import subprocess
 import glob
-
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
