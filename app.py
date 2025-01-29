@@ -13,6 +13,7 @@ import logging
 import subprocess
 import glob
 import os
+import pandas
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
